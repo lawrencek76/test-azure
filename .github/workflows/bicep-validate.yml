@@ -5,12 +5,18 @@ on:
     paths:
       - '**/*.bicep'
       - '.github/workflows/bicep-validate.yml'
+      - '.github/workflows/deploy-lab.yml'
+      - 'README.md'
+      - 'agents.md'
   push:
     branches:
       - main
     paths:
       - '**/*.bicep'
       - '.github/workflows/bicep-validate.yml'
+      - '.github/workflows/deploy-lab.yml'
+      - 'README.md'
+      - 'agents.md'
 
 permissions:
   contents: read

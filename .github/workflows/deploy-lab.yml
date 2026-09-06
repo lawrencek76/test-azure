@@ -180,6 +180,7 @@ jobs:
               az deployment group create \
                 --name "${example}-$(date -u +'%Y%m%d%H%M%S')" \
                 --resource-group "${rg_target}" \
+                --mode Complete \
                 --template-file "${template_file}" \
                 --parameters adminPublicKey="${ADMIN_PUBLIC_KEY}" namePrefix="${prefix}" >/dev/null
               ;;

@@ -102,7 +102,7 @@ resource hostBNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
           direction: 'Inbound'
           priority: 200
           protocol: 'Tcp'
-          sourceAddressPrefix: networkLayout.hostASubnetCidr
+          sourceAddressPrefix: vmConfigs[0].privateIp
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
           destinationPortRange: '80'
