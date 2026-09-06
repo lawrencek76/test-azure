@@ -25,6 +25,11 @@ on:
         required: false
         default: eastus
         type: string
+      resource_group:
+        description: 'Managed lab resource group to deploy into (for example: azlearn-rg-01)'
+        required: false
+        default: azlearn-rg-01
+        type: string
   schedule:
     - cron: '0 * * * *'
 
@@ -33,6 +38,7 @@ permissions:
 
 env:
   LAB_TAG: test-azure-lab
+  LAB_STACK_NAME: ${{ vars.LAB_STACK_NAME || 'test-azure-lab-stack' }}
   LAB_RG_PREFIX: ${{ vars.LAB_RG_PREFIX || 'azlearn-rg' }}
   LAB_RG_COUNT: ${{ vars.LAB_RG_COUNT || '3' }}
 
@@ -57,6 +63,7 @@ jobs:
           DISPATCH_OPERATION: ${{ github.event.inputs.operation }}
           DISPATCH_EXAMPLE: ${{ github.event.inputs.example }}
           DISPATCH_LOCATION: ${{ github.event.inputs.location }}
+          DISPATCH_RESOURCE_GROUP: ${{ github.event.inputs.resource_group }}
           ADMIN_PUBLIC_KEY: ${{ vars.AZURE_ADMIN_SSH_PUBLIC_KEY }}
         run: |
           set -euo pipefail
@@ -77,73 +84,65 @@ jobs:
             rgs+=("${rg_name}")
           done
 
-          ensure_rgs() {
-            for rg in "${rgs[@]}"; do
-              if az group show --name "${rg}" >/dev/null 2>&1; then
-                echo "Resource group ${rg} already exists"
-              else
-                az group create \
-                  --name "${rg}" \
-                  --location "${location}" \
-                  --tags managedBy="${LAB_TAG}" >/dev/null
-                echo "Created ${rg}"
-              fi
-              az group update \
-                --name "${rg}" \
-                --set tags.managedBy="${LAB_TAG}" >/dev/null
-            done
+          deploy_rg_stack() {
+            az stack sub create \
+              --name "${LAB_STACK_NAME}" \
+              --location "${location}" \
+              --template-file "infra/stacks/lab-resource-groups.bicep" \
+              --parameters \
+                rgPrefix="${LAB_RG_PREFIX}" \
+                rgCount="${LAB_RG_COUNT}" \
+                location="${location}" \
+                managedByTag="${LAB_TAG}" \
+                cleanupAfter="${cleanup_after}" \
+              --tags managedBy="${LAB_TAG}" cleanupAfter="${cleanup_after}" \
+              --deny-settings-mode none \
+              --action-on-unmanage deleteAll \
+              --yes >/dev/null
           }
 
-          set_cleanup_tag() {
-            local rg_name="$1"
-            az group update \
-              --name "${rg_name}" \
-              --set tags.managedBy="${LAB_TAG}" tags.cleanupAfter="${cleanup_after}" >/dev/null
+          stack_exists() {
+            az stack sub show --name "${LAB_STACK_NAME}" >/dev/null 2>&1
           }
 
           cleanup_rgs() {
-            local now_epoch
-            now_epoch="$(date -u +%s)"
-            local due_groups=()
-
-            while IFS=$'\t' read -r rg_name cleanup_tag; do
-              if [[ -z "${rg_name}" || -z "${cleanup_tag:-}" ]]; then
-                continue
-              fi
-
-              if ! cleanup_epoch="$(date -u -d "${cleanup_tag}" +%s 2>/dev/null)"; then
-                echo "Skipping ${rg_name}: invalid cleanupAfter tag '${cleanup_tag}'"
-                continue
-              fi
-
-              if (( cleanup_epoch <= now_epoch )); then
-                due_groups+=("${rg_name}")
-              fi
-            done < <(az group list \
-              --tag managedBy="${LAB_TAG}" \
-              --query "[].{name:name,cleanupAfter:tags.cleanupAfter}" \
-              -o tsv)
-
-            if [[ "${#due_groups[@]}" -eq 0 ]]; then
-              echo "No lab resource groups are due for cleanup at ${now_utc}."
+            if ! stack_exists; then
+              echo "No deployment stack named ${LAB_STACK_NAME} was found."
               return
             fi
 
-            for rg in "${due_groups[@]}"; do
-              echo "Deleting due lab resource group: ${rg}"
-              az group delete --name "${rg}" --yes --no-wait
-            done
+            local now_epoch
+            now_epoch="$(date -u +%s)"
+            cleanup_tag="$(az stack sub show --name "${LAB_STACK_NAME}" --query tags.cleanupAfter -o tsv)"
+
+            if [[ -z "${cleanup_tag}" ]]; then
+              echo "Stack ${LAB_STACK_NAME} has no cleanupAfter tag; skipping cleanup."
+              return
+            fi
+
+            if ! cleanup_epoch="$(date -u -d "${cleanup_tag}" +%s 2>/dev/null)"; then
+              echo "Invalid stack cleanupAfter tag '${cleanup_tag}'."
+              exit 1
+            fi
+
+            if (( cleanup_epoch > now_epoch )); then
+              echo "Cleanup is not due yet for stack ${LAB_STACK_NAME} (cleanupAfter=${cleanup_tag})."
+              return
+            fi
+
+            echo "Deleting stack ${LAB_STACK_NAME} and all managed lab resource groups."
+            az stack sub delete \
+              --name "${LAB_STACK_NAME}" \
+              --action-on-unmanage deleteAll \
+              --yes >/dev/null
           }
 
           case "${operation}" in
             prepare-rgs)
-              ensure_rgs
-              for rg in "${rgs[@]}"; do
-                set_cleanup_tag "${rg}"
-              done
+              deploy_rg_stack
               ;;
             deploy-example)
-              ensure_rgs
+              deploy_rg_stack
 
               if [[ -z "${ADMIN_PUBLIC_KEY}" ]]; then
                 echo "Repository variable AZURE_ADMIN_SSH_PUBLIC_KEY must be set." >&2
@@ -151,30 +150,27 @@ jobs:
               fi
 
               example="${DISPATCH_EXAMPLE:-two-vms-separate-vnets}"
-              case "${example}" in
-                two-vms-separate-vnets)
-                  rg_index=0
-                  template_file="examples/two-vms-separate-vnets/main.bicep"
-                  prefix="separatevnet"
-                  ;;
-                two-vms-shared-vnet)
-                  rg_index=1
-                  template_file="examples/two-vms-shared-vnet/main.bicep"
-                  prefix="sharedvnet"
-                  ;;
-                *)
-                  echo "Unsupported example: ${example}" >&2
-                  exit 1
-                  ;;
-              esac
-
-              if (( rg_index >= ${#rgs[@]} )); then
-                echo "LAB_RG_COUNT=${LAB_RG_COUNT} is too small for ${example}. Increase LAB_RG_COUNT to at least $((rg_index + 1))." >&2
+              template_file="examples/${example}/main.bicep"
+              if [[ ! -f "${template_file}" ]]; then
+                echo "Unsupported example: ${example}" >&2
                 exit 1
               fi
 
-              rg_target="${rgs[${rg_index}]}"
-              set_cleanup_tag "${rg_target}"
+              rg_target="${DISPATCH_RESOURCE_GROUP:-${LAB_RG_PREFIX}-01}"
+              rg_is_managed='false'
+              for rg in "${rgs[@]}"; do
+                if [[ "${rg}" == "${rg_target}" ]]; then
+                  rg_is_managed='true'
+                  break
+                fi
+              done
+
+              if [[ "${rg_is_managed}" != 'true' ]]; then
+                echo "resource_group must be one of managed lab groups: ${rgs[*]}" >&2
+                exit 1
+              fi
+
+              prefix="${example//-/}"
 
               echo "Deploying ${example} into ${rg_target}"
               az deployment group create \

@@ -25,6 +25,7 @@ Set the following **repository secret**:
 Set the following **repository variables**:
 
 - `AZURE_ADMIN_SSH_PUBLIC_KEY`: SSH public key deployed to both VMs.
+- `LAB_STACK_NAME` (optional, default `test-azure-lab-stack`): deployment stack name used to manage lab resource groups.
 - `LAB_RG_PREFIX` (optional, default `azlearn-rg`): prefix used for lab resource groups.
 - `LAB_RG_COUNT` (optional, default `3`): number of managed lab resource groups to maintain.
 
@@ -35,19 +36,20 @@ Workflow: `.github/workflows/deploy-lab.yml`
 
 Manual (`workflow_dispatch`) inputs:
 - `operation`
-  - `prepare-rgs`: create/update the managed lab RGs and set cleanup tags
+  - `prepare-rgs`: create/update managed lab RGs via Bicep deployment stack and set cleanup tags
   - `deploy-example`: deploy one selected example to a managed RG
-  - `cleanup-now`: delete managed lab RGs whose cleanup timestamp is due
+  - `cleanup-now`: delete the deployment stack (and all managed lab RGs) when cleanup is due
 - `example` (used for deploy only):
   - `two-vms-separate-vnets`
   - `two-vms-shared-vnet`
 - `location`: Azure region (default `eastus`)
+- `resource_group`: target managed lab RG (default `azlearn-rg-01`)
 
 Automatic cleanup:
 - The same workflow runs hourly on schedule.
-- `prepare-rgs` refreshes all managed RG tags with `cleanupAfter = now + 24h`.
-- `deploy-example` refreshes `cleanupAfter` only for the target RG.
-- Scheduled cleanup removes tagged lab RGs when `cleanupAfter` is reached.
+- `prepare-rgs` and `deploy-example` both refresh stack and RG tags with `cleanupAfter = now + 24h`.
+- Scheduled cleanup checks the stack cleanup timestamp.
+- When due, cleanup deletes the deployment stack with `deleteAll`, which deletes all stack-managed lab resource groups.
 
 ### 2) Bicep validation CI
 Workflow: `.github/workflows/bicep-validate.yml`
