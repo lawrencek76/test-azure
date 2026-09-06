@@ -1,0 +1,159 @@
+name: Deploy or Cleanup Azure Lab
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Select what to run
+        required: true
+        default: deploy-example
+        type: choice
+        options:
+          - prepare-rgs
+          - deploy-example
+          - cleanup-now
+      example:
+        description: Example to deploy (used for deploy-example only)
+        required: true
+        default: two-vms-separate-vnets
+        type: choice
+        options:
+          - two-vms-separate-vnets
+          - two-vms-shared-vnet
+      location:
+        description: Azure region for resource groups and deployments
+        required: false
+        default: eastus
+        type: string
+  schedule:
+    - cron: '0 * * * *'
+
+permissions:
+  contents: read
+
+env:
+  LAB_TAG: test-azure-lab
+  LAB_RG_PREFIX: ${{ vars.LAB_RG_PREFIX || 'azlearn-rg' }}
+  LAB_RG_COUNT: ${{ vars.LAB_RG_COUNT || '3' }}
+
+jobs:
+  manage-lab:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Ensure Bicep is available
+        run: az bicep install
+
+      - name: Prepare, deploy, or cleanup
+        shell: bash
+        env:
+          DISPATCH_OPERATION: ${{ github.event.inputs.operation }}
+          DISPATCH_EXAMPLE: ${{ github.event.inputs.example }}
+          DISPATCH_LOCATION: ${{ github.event.inputs.location }}
+          ADMIN_PUBLIC_KEY: ${{ vars.AZURE_ADMIN_SSH_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+
+          operation="${DISPATCH_OPERATION:-cleanup-now}"
+          if [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
+            operation="cleanup-now"
+          fi
+
+          location="${DISPATCH_LOCATION:-eastus}"
+          cleanup_after="$(date -u -d '+24 hours' +'%Y-%m-%dT%H:%M:%SZ')"
+          now_utc="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+          declare -a rgs=()
+          rg_count="${LAB_RG_COUNT}"
+          for i in $(seq 1 "${rg_count}"); do
+            rg_name="${LAB_RG_PREFIX}-$(printf '%02d' "${i}")"
+            rgs+=("${rg_name}")
+          done
+
+          ensure_rgs() {
+            for rg in "${rgs[@]}"; do
+              if az group show --name "${rg}" >/dev/null 2>&1; then
+                echo "Resource group ${rg} already exists"
+              else
+                az group create \
+                  --name "${rg}" \
+                  --location "${location}" \
+                  --tags managedBy="${LAB_TAG}" >/dev/null
+                echo "Created ${rg}"
+              fi
+
+              az group update \
+                --name "${rg}" \
+                --set tags.managedBy="${LAB_TAG}" tags.cleanupAfter="${cleanup_after}" >/dev/null
+            done
+          }
+
+          cleanup_rgs() {
+            mapfile -t due_groups < <(az group list \
+              --tag managedBy="${LAB_TAG}" \
+              --query "[?tags.cleanupAfter!=null && tags.cleanupAfter<='${now_utc}'].name" \
+              -o tsv)
+
+            if [[ "${#due_groups[@]}" -eq 0 ]]; then
+              echo "No lab resource groups are due for cleanup at ${now_utc}."
+              return
+            fi
+
+            for rg in "${due_groups[@]}"; do
+              echo "Deleting due lab resource group: ${rg}"
+              az group delete --name "${rg}" --yes --no-wait
+            done
+          }
+
+          case "${operation}" in
+            prepare-rgs)
+              ensure_rgs
+              ;;
+            deploy-example)
+              ensure_rgs
+
+              if [[ -z "${ADMIN_PUBLIC_KEY}" ]]; then
+                echo "Repository variable AZURE_ADMIN_SSH_PUBLIC_KEY must be set." >&2
+                exit 1
+              fi
+
+              example="${DISPATCH_EXAMPLE:-two-vms-separate-vnets}"
+              case "${example}" in
+                two-vms-separate-vnets)
+                  rg_target="${LAB_RG_PREFIX}-01"
+                  template_file="examples/two-vms-separate-vnets/main.bicep"
+                  prefix="separatevnet"
+                  ;;
+                two-vms-shared-vnet)
+                  rg_target="${LAB_RG_PREFIX}-02"
+                  template_file="examples/two-vms-shared-vnet/main.bicep"
+                  prefix="sharedvnet"
+                  ;;
+                *)
+                  echo "Unsupported example: ${example}" >&2
+                  exit 1
+                  ;;
+              esac
+
+              echo "Deploying ${example} into ${rg_target}"
+              az deployment group create \
+                --name "${example}-$(date -u +'%Y%m%d%H%M%S')" \
+                --resource-group "${rg_target}" \
+                --template-file "${template_file}" \
+                --parameters adminPublicKey="${ADMIN_PUBLIC_KEY}" namePrefix="${prefix}" >/dev/null
+              ;;
+            cleanup-now)
+              cleanup_rgs
+              ;;
+            *)
+              echo "Unsupported operation: ${operation}" >&2
+              exit 1
+              ;;
+          esac

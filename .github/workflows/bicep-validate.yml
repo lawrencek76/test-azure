@@ -1,0 +1,36 @@
+name: Validate Bicep
+
+on:
+  pull_request:
+    paths:
+      - '**/*.bicep'
+      - '.github/workflows/bicep-validate.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.bicep'
+      - '.github/workflows/bicep-validate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  bicep-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bicep
+        uses: azure/setup-bicep@v2
+
+      - name: Build and lint all Bicep files
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            echo "Validating ${file}"
+            bicep build "${file}" --stdout >/dev/null
+            bicep lint "${file}"
+          done < <(find . -name '*.bicep' -print0)

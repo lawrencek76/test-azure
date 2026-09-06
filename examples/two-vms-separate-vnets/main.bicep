@@ -1,0 +1,26 @@
+targetScope = 'resourceGroup'
+
+@description('SSH public key used for VM authentication.')
+param adminPublicKey string
+
+@description('Resource name prefix for this example deployment.')
+param namePrefix string = 'separatevnet'
+
+module networkLab '../../infra/modules/two-vm-network-lab.bicep' = {
+  name: 'two-vms-separate-vnet'
+  params: {
+    adminPublicKey: adminPublicKey
+    namePrefix: namePrefix
+    sameVnet: false
+    networkLayout: {
+      hostAVnetCidr: '10.10.0.0/16'
+      hostASubnetCidr: '10.10.1.0/24'
+      hostBVnetCidr: '10.11.0.0/16'
+      hostBSubnetCidr: '10.11.1.0/24'
+    }
+  }
+}
+
+output hostAPublicIp string = networkLab.outputs.hostAPublicIp
+output hostBPublicIp string = networkLab.outputs.hostBPublicIp
+output blockedFlow string = networkLab.outputs.blockedFlow
