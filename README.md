@@ -5,9 +5,9 @@ Azure learning repo with Bicep examples designed for experimentation, troublesho
 ## What is in this repo
 
 - **Example 1**: `examples/two-vms-separate-vnets`  
-  Two tiny Spot Linux VMs, each in its own VNet, peered together. `hostb` has an NSG deny rule that blocks HTTP (port 80) from `hosta`.
+  Two tiny Spot Linux VMs, each in its own IPv6-enabled VNet, peered together. `hostb` has an NSG deny rule that blocks HTTP (port 80) from `hosta`.
 - **Example 2**: `examples/two-vms-shared-vnet`  
-  Same troubleshooting scenario, but both VMs are in one VNet with separate subnets.
+  Same troubleshooting scenario, but both VMs are in one IPv6-enabled VNet with separate subnets.
 
 Both examples use:
 - Spot VM priority
@@ -15,6 +15,7 @@ Both examples use:
 - `maxPrice = -1`
 - Standard SSD OS disk
 - Ubuntu 22.04 image with network troubleshooting tools (curl, dnsutils, iperf3, ping, traceroute, netcat)
+- IPv6-only Standard public IP resources
 
 ## GitHub configuration required (OIDC, no secret login)
 
@@ -29,7 +30,7 @@ Set these **repository variables** (the 3 values needed for no-secret Azure logi
 Also set these **repository variables**:
 
 - `AZURE_ADMIN_SSH_PUBLIC_KEY`: SSH public key deployed to both VMs.
-- `AZURE_TRUSTED_SSH_CIDR`: trusted source CIDR for SSH to lab VMs (for example `203.0.113.10/32`).
+- `AZURE_TRUSTED_SSH_CIDR`: trusted source CIDR for SSH to lab VMs (for example `2001:db8::1/128`).
 - `LAB_STACK_NAME` (optional, default `test-azure-lab-stack`): deployment stack name used to manage lab resource groups.
 - `LAB_RG_PREFIX` (optional, default `azlearn-rg`): prefix used for lab resource groups.
 - `LAB_RG_COUNT` (optional, default `3`): number of managed lab resource groups to maintain.
@@ -46,6 +47,18 @@ Generate a key pair locally and set the public key text into `AZURE_ADMIN_SSH_PU
 ssh-keygen -t ed25519 -C "test-azure-lab" -f ~/.ssh/test-azure-lab
 cat ~/.ssh/test-azure-lab.pub
 ```
+
+For IPv6-only public IP labs, set `AZURE_TRUSTED_SSH_CIDR` to an IPv6 CIDR (for example `2001:db8::1/128`).
+
+## Helper script to set repository variables
+
+Use `/home/runner/work/test-azure/test-azure/scripts/set-github-vars.sh` to set required repository variables in one step:
+
+```bash
+/home/runner/work/test-azure/test-azure/scripts/set-github-vars.sh lawrencek76/test-azure
+```
+
+The script prompts for required values and calls `gh variable set` for the target repository.
 
 ## Workflows
 
@@ -66,6 +79,8 @@ Manual (`workflow_dispatch`) inputs:
 Deployments use per-example `.bicepparam` files:
 - `examples/two-vms-separate-vnets/main.bicepparam`
 - `examples/two-vms-shared-vnet/main.bicepparam`
+
+Each lab is a standalone Bicep template (`main.bicep`) under its own example folder.
 
 ### 2) Cleanup lab (daily)
 Workflow: `.github/workflows/cleanup-lab.yml`

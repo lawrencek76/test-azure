@@ -10,4 +10,5 @@
 - Azure auth for workflows uses OIDC (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) with `azure/login@v2`, not `AZURE_CREDENTIALS`.
 - Example deployments now use `.bicepparam` files that read `AZURE_ADMIN_SSH_PUBLIC_KEY` and `AZURE_TRUSTED_SSH_CIDR` from environment variables.
 - Cleanup scheduling is handled in a dedicated `.github/workflows/cleanup-lab.yml` workflow (daily 05:00 UTC), separate from deploy workflow.
-- Both examples are entrypoints that call `infra/modules/two-vm-network-lab.bicep`.
+- Both examples are standalone templates in their own `main.bicep` files and no longer use a shared module.
+- Both labs use IPv6-enabled VNets/subnets and IPv6-only public IP addresses.
