@@ -239,10 +239,10 @@ resource nics 'Microsoft.Network/networkInterfaces@2024-05-01' = [for (config, i
           privateIPAddress: config.privateIp
           subnet: {
             id: sameVnet
-              ? '${sharedVnet.id}/subnets/${config.subnetName}'
+              ? resourceId('Microsoft.Network/virtualNetworks/subnets', sharedVnet.name, config.subnetName)
               : i == 0
-                  ? '${hostAVnet.id}/subnets/${config.subnetName}'
-                  : '${hostBVnet.id}/subnets/${config.subnetName}'
+                  ? resourceId('Microsoft.Network/virtualNetworks/subnets', hostAVnet.name, config.subnetName)
+                  : resourceId('Microsoft.Network/virtualNetworks/subnets', hostBVnet.name, config.subnetName)
           }
           publicIPAddress: {
             id: publicIps[i].id

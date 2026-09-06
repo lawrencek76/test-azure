@@ -74,8 +74,8 @@ jobs:
           fi
 
           location="${DISPATCH_LOCATION:-eastus}"
-          cleanup_after="$(date -u -d '+24 hours' +'%Y-%m-%dT%H:%M:%SZ')"
-          now_utc="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          cleanup_after="$(python3 -c "from datetime import datetime, timezone, timedelta; print((datetime.now(timezone.utc) + timedelta(hours=24)).strftime('%Y-%m-%dT%H:%M:%SZ'))")"
+          now_utc="$(python3 -c "from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))")"
 
           declare -a rgs=()
           rg_count="${LAB_RG_COUNT}"
@@ -105,6 +105,10 @@ jobs:
             az stack sub show --name "${LAB_STACK_NAME}" >/dev/null 2>&1
           }
 
+          to_epoch() {
+            python3 -c "from datetime import datetime, timezone; import sys; value=sys.argv[1]; parsed=datetime.fromisoformat(value.replace('Z', '+00:00')); parsed=parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc); print(int(parsed.timestamp()))" "$1"
+          }
+
           cleanup_rgs() {
             if ! stack_exists; then
               echo "No deployment stack named ${LAB_STACK_NAME} was found."
@@ -112,7 +116,7 @@ jobs:
             fi
 
             local now_epoch
-            now_epoch="$(date -u +%s)"
+            now_epoch="$(python3 -c 'import time; print(int(time.time()))')"
             cleanup_tag="$(az stack sub show --name "${LAB_STACK_NAME}" --query tags.cleanupAfter -o tsv)"
 
             if [[ -z "${cleanup_tag}" ]]; then
@@ -120,7 +124,7 @@ jobs:
               return
             fi
 
-            if ! cleanup_epoch="$(date -u -d "${cleanup_tag}" +%s 2>/dev/null)"; then
+            if ! cleanup_epoch="$(to_epoch "${cleanup_tag}")"; then
               echo "Invalid stack cleanupAfter tag '${cleanup_tag}'."
               exit 1
             fi
