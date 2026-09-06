@@ -1,0 +1,174 @@
+name: Deploy Azure Lab
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Select what to run
+        required: true
+        default: deploy-example
+        type: choice
+        options:
+          - prepare-rgs
+          - deploy-example
+      example:
+        description: Example to deploy (used for deploy-example only)
+        required: true
+        default: two-vms-separate-vnets
+        type: choice
+        options:
+          - two-vms-separate-vnets
+          - two-vms-shared-vnet
+      location:
+        description: Azure region for resource groups and deployments
+        required: false
+        default: eastus
+        type: string
+      resource_group:
+        description: 'Managed lab resource group to deploy into (for example: azlearn-rg-01)'
+        required: false
+        default: azlearn-rg-01
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  LAB_TAG: test-azure-lab
+  LAB_STACK_NAME: ${{ vars.LAB_STACK_NAME || 'test-azure-lab-stack' }}
+  LAB_RG_PREFIX: ${{ vars.LAB_RG_PREFIX || 'azlearn-rg' }}
+  LAB_RG_COUNT: ${{ vars.LAB_RG_COUNT || '3' }}
+
+jobs:
+  deploy-lab:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Ensure Bicep is available
+        run: az bicep install
+
+      - name: Prepare or deploy lab
+        shell: bash
+        env:
+          DISPATCH_OPERATION: ${{ github.event.inputs.operation }}
+          DISPATCH_EXAMPLE: ${{ github.event.inputs.example }}
+          DISPATCH_LOCATION: ${{ github.event.inputs.location }}
+          DISPATCH_RESOURCE_GROUP: ${{ github.event.inputs.resource_group }}
+          AZURE_ADMIN_SSH_PUBLIC_KEY: ${{ vars.AZURE_ADMIN_SSH_PUBLIC_KEY }}
+          AZURE_TRUSTED_SSH_CIDR: ${{ vars.AZURE_TRUSTED_SSH_CIDR }}
+        run: |
+          set -euo pipefail
+
+          operation="${DISPATCH_OPERATION:-deploy-example}"
+          location="${DISPATCH_LOCATION:-eastus}"
+          cleanup_after="$(python3 -c "from datetime import datetime, timezone, timedelta; print((datetime.now(timezone.utc) + timedelta(hours=24)).strftime('%Y-%m-%dT%H:%M:%SZ'))")"
+
+          declare -a rgs=()
+          rg_count="${LAB_RG_COUNT}"
+          for i in $(seq 1 "${rg_count}"); do
+            rg_name="${LAB_RG_PREFIX}-$(printf '%02d' "${i}")"
+            rgs+=("${rg_name}")
+          done
+
+          stack_exists() {
+            az stack sub show --name "${LAB_STACK_NAME}" >/dev/null 2>&1
+          }
+
+          deploy_rg_stack() {
+            local stack_location
+            stack_location="${location}"
+            local deployment_location
+            deployment_location="${location}"
+            if stack_exists; then
+              existing_stack_location="$(az stack sub show --name "${LAB_STACK_NAME}" --query location -o tsv)"
+              if [[ -n "${existing_stack_location}" && "${existing_stack_location}" != "null" ]]; then
+                stack_location="${existing_stack_location}"
+              fi
+
+              existing_rg_location="$(az group show --name "${rgs[0]}" --query location -o tsv 2>/dev/null || true)"
+              if [[ -n "${existing_rg_location}" && "${existing_rg_location}" != "null" ]]; then
+                deployment_location="${existing_rg_location}"
+                if [[ "${deployment_location}" != "${location}" ]]; then
+                  echo "Using existing managed RG location '${deployment_location}' instead of requested '${location}'."
+                fi
+              fi
+            fi
+
+            az stack sub create \
+              --name "${LAB_STACK_NAME}" \
+              --location "${stack_location}" \
+              --template-file "infra/stacks/lab-resource-groups.bicep" \
+              --parameters \
+                rgPrefix="${LAB_RG_PREFIX}" \
+                rgCount="${LAB_RG_COUNT}" \
+                location="${deployment_location}" \
+                managedByTag="${LAB_TAG}" \
+                cleanupAfter="${cleanup_after}" \
+              --tags managedBy="${LAB_TAG}" cleanupAfter="${cleanup_after}" \
+              --deny-settings-mode none \
+              --action-on-unmanage deleteAll \
+              --yes >/dev/null
+          }
+
+          case "${operation}" in
+            prepare-rgs)
+              deploy_rg_stack
+              ;;
+            deploy-example)
+              deploy_rg_stack
+
+              if [[ -z "${AZURE_ADMIN_SSH_PUBLIC_KEY}" ]]; then
+                echo "Repository variable AZURE_ADMIN_SSH_PUBLIC_KEY must be set." >&2
+                exit 1
+              fi
+              if [[ -z "${AZURE_TRUSTED_SSH_CIDR}" ]]; then
+                echo "Repository variable AZURE_TRUSTED_SSH_CIDR must be set (for example, your-public-ip/32)." >&2
+                exit 1
+              fi
+
+              example="${DISPATCH_EXAMPLE:-two-vms-separate-vnets}"
+              param_file="examples/${example}/main.bicepparam"
+              if [[ ! -f "${param_file}" ]]; then
+                echo "Unsupported example: ${example}" >&2
+                exit 1
+              fi
+
+              rg_target="${DISPATCH_RESOURCE_GROUP:-${LAB_RG_PREFIX}-01}"
+              rg_is_managed='false'
+              for rg in "${rgs[@]}"; do
+                if [[ "${rg}" == "${rg_target}" ]]; then
+                  rg_is_managed='true'
+                  break
+                fi
+              done
+
+              if [[ "${rg_is_managed}" != 'true' ]]; then
+                echo "resource_group must be one of managed lab groups: ${rgs[*]}" >&2
+                exit 1
+              fi
+              if ! az group show --name "${rg_target}" >/dev/null 2>&1; then
+                echo "Managed resource group ${rg_target} does not exist yet. Run operation=prepare-rgs first." >&2
+                exit 1
+              fi
+
+              echo "Deploying ${example} into ${rg_target}"
+              az deployment group create \
+                --name "${example}-$(date -u +'%Y%m%d%H%M%S')" \
+                --resource-group "${rg_target}" \
+                --parameters "${param_file}" >/dev/null
+              ;;
+            *)
+              echo "Unsupported operation: ${operation}" >&2
+              exit 1
+              ;;
+          esac

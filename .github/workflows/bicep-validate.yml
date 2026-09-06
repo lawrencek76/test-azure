@@ -1,0 +1,51 @@
+name: Validate Bicep
+
+on:
+  pull_request:
+    paths:
+      - '**/*.bicep'
+      - '**/*.bicepparam'
+      - '.github/workflows/bicep-validate.yml'
+      - '.github/workflows/deploy-lab.yml'
+      - '.github/workflows/cleanup-lab.yml'
+      - 'README.md'
+      - 'agents.md'
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.bicep'
+      - '**/*.bicepparam'
+      - '.github/workflows/bicep-validate.yml'
+      - '.github/workflows/deploy-lab.yml'
+      - '.github/workflows/cleanup-lab.yml'
+      - 'README.md'
+      - 'agents.md'
+
+permissions:
+  contents: read
+
+jobs:
+  bicep-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bicep
+        uses: azure/setup-bicep@v2
+
+      - name: Build and lint all Bicep files
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            echo "Validating ${file}"
+            bicep build "${file}" --stdout >/dev/null
+            bicep lint "${file}"
+          done < <(find . -name '*.bicep' -print0)
+          while IFS= read -r -d '' file; do
+            echo "Validating params ${file}"
+            bicep build-params "${file}" --stdout >/dev/null
+            bicep lint "${file}"
+          done < <(find . -name '*.bicepparam' -print0)
