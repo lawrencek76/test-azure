@@ -85,14 +85,23 @@ jobs:
           done
 
           deploy_rg_stack() {
+            local stack_location
+            stack_location="${location}"
+            if stack_exists; then
+              existing_stack_location="$(az stack sub show --name "${LAB_STACK_NAME}" --query location -o tsv)"
+              if [[ -n "${existing_stack_location}" && "${existing_stack_location}" != "null" ]]; then
+                stack_location="${existing_stack_location}"
+              fi
+            fi
+
             az stack sub create \
               --name "${LAB_STACK_NAME}" \
-              --location "${location}" \
+              --location "${stack_location}" \
               --template-file "infra/stacks/lab-resource-groups.bicep" \
               --parameters \
                 rgPrefix="${LAB_RG_PREFIX}" \
                 rgCount="${LAB_RG_COUNT}" \
-                location="${location}" \
+                location="${stack_location}" \
                 managedByTag="${LAB_TAG}" \
                 cleanupAfter="${cleanup_after}" \
               --tags managedBy="${LAB_TAG}" cleanupAfter="${cleanup_after}" \
@@ -119,7 +128,7 @@ jobs:
             now_epoch="$(python3 -c 'import time; print(int(time.time()))')"
             cleanup_tag="$(az stack sub show --name "${LAB_STACK_NAME}" --query tags.cleanupAfter -o tsv)"
 
-            if [[ -z "${cleanup_tag}" ]]; then
+            if [[ -z "${cleanup_tag}" || "${cleanup_tag}" == "null" ]]; then
               echo "Stack ${LAB_STACK_NAME} has no cleanupAfter tag; skipping cleanup."
               return
             fi

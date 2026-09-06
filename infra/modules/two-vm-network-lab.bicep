@@ -320,8 +320,8 @@ resource virtualMachines 'Microsoft.Compute/virtualMachines@2024-07-01' = [for (
   }
 }]
 
-output hostAPublicIp string = publicIps[0].properties.ipAddress
-output hostBPublicIp string = publicIps[1].properties.ipAddress
+output hostAPublicIp string? = publicIps[0].properties.ipAddress
+output hostBPublicIp string? = publicIps[1].properties.ipAddress
 output hostAPrivateIp string = vmConfigs[0].privateIp
 output hostBPrivateIp string = vmConfigs[1].privateIp
 output blockedFlow string = 'Traffic from ${vmConfigs[0].privateIp} to ${vmConfigs[1].privateIp}:80 is denied by ${hostBNsg.name}/deny-http-from-hosta'
