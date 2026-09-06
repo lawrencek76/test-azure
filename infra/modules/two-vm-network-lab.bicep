@@ -118,7 +118,14 @@ resource hostBNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
           direction: 'Inbound'
           priority: 300
           protocol: 'Tcp'
-          sourceAddressPrefix: 'VirtualNetwork'
+          sourceAddressPrefixes: sameVnet
+            ? [
+                'VirtualNetwork'
+              ]
+            : [
+                networkLayout.hostAVnetCidr
+                networkLayout.hostBVnetCidr
+              ]
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
           destinationPortRange: '80'
