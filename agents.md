@@ -7,4 +7,7 @@
 - `operation=deploy-example` expects `resource_group` to be one of the managed RG names generated from `LAB_RG_PREFIX` + `LAB_RG_COUNT`.
 - `AZURE_ADMIN_SSH_PUBLIC_KEY` is read from repository variables (not secrets) and injected as the VM authorized key.
 - `AZURE_TRUSTED_SSH_CIDR` is required and passed to examples to restrict SSH ingress.
+- Azure auth for workflows uses OIDC (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) with `azure/login@v2`, not `AZURE_CREDENTIALS`.
+- Example deployments now use `.bicepparam` files that read `AZURE_ADMIN_SSH_PUBLIC_KEY` and `AZURE_TRUSTED_SSH_CIDR` from environment variables.
+- Cleanup scheduling is handled in a dedicated `.github/workflows/cleanup-lab.yml` workflow (daily 05:00 UTC), separate from deploy workflow.
 - Both examples are entrypoints that call `infra/modules/two-vm-network-lab.bicep`.

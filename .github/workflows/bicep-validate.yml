@@ -4,8 +4,10 @@ on:
   pull_request:
     paths:
       - '**/*.bicep'
+      - '**/*.bicepparam'
       - '.github/workflows/bicep-validate.yml'
       - '.github/workflows/deploy-lab.yml'
+      - '.github/workflows/cleanup-lab.yml'
       - 'README.md'
       - 'agents.md'
   push:
@@ -13,8 +15,10 @@ on:
       - main
     paths:
       - '**/*.bicep'
+      - '**/*.bicepparam'
       - '.github/workflows/bicep-validate.yml'
       - '.github/workflows/deploy-lab.yml'
+      - '.github/workflows/cleanup-lab.yml'
       - 'README.md'
       - 'agents.md'
 
@@ -40,3 +44,8 @@ jobs:
             bicep build "${file}" --stdout >/dev/null
             bicep lint "${file}"
           done < <(find . -name '*.bicep' -print0)
+          while IFS= read -r -d '' file; do
+            echo "Validating params ${file}"
+            bicep build-params "${file}" --stdout >/dev/null
+            bicep lint "${file}"
+          done < <(find . -name '*.bicepparam' -print0)

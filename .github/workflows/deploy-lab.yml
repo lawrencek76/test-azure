@@ -1,4 +1,4 @@
-name: Deploy or Cleanup Azure Lab
+name: Deploy Azure Lab
 
 on:
   workflow_dispatch:
@@ -11,7 +11,6 @@ on:
         options:
           - prepare-rgs
           - deploy-example
-          - cleanup-now
       example:
         description: Example to deploy (used for deploy-example only)
         required: true
@@ -30,10 +29,9 @@ on:
         required: false
         default: azlearn-rg-01
         type: string
-  schedule:
-    - cron: '0 * * * *'
 
 permissions:
+  id-token: write
   contents: read
 
 env:
@@ -43,40 +41,37 @@ env:
   LAB_RG_COUNT: ${{ vars.LAB_RG_COUNT || '3' }}
 
 jobs:
-  manage-lab:
+  deploy-lab:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Azure Login
+      - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Ensure Bicep is available
         run: az bicep install
 
-      - name: Prepare, deploy, or cleanup
+      - name: Prepare or deploy lab
         shell: bash
         env:
           DISPATCH_OPERATION: ${{ github.event.inputs.operation }}
           DISPATCH_EXAMPLE: ${{ github.event.inputs.example }}
           DISPATCH_LOCATION: ${{ github.event.inputs.location }}
           DISPATCH_RESOURCE_GROUP: ${{ github.event.inputs.resource_group }}
-          ADMIN_PUBLIC_KEY: ${{ vars.AZURE_ADMIN_SSH_PUBLIC_KEY }}
-          TRUSTED_SSH_SOURCE_CIDR: ${{ vars.AZURE_TRUSTED_SSH_CIDR }}
+          AZURE_ADMIN_SSH_PUBLIC_KEY: ${{ vars.AZURE_ADMIN_SSH_PUBLIC_KEY }}
+          AZURE_TRUSTED_SSH_CIDR: ${{ vars.AZURE_TRUSTED_SSH_CIDR }}
         run: |
           set -euo pipefail
 
-          operation="${DISPATCH_OPERATION:-cleanup-now}"
-          if [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
-            operation="cleanup-now"
-          fi
-
+          operation="${DISPATCH_OPERATION:-deploy-example}"
           location="${DISPATCH_LOCATION:-eastus}"
           cleanup_after="$(python3 -c "from datetime import datetime, timezone, timedelta; print((datetime.now(timezone.utc) + timedelta(hours=24)).strftime('%Y-%m-%dT%H:%M:%SZ'))")"
-          now_utc="$(python3 -c "from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))")"
 
           declare -a rgs=()
           rg_count="${LAB_RG_COUNT}"
@@ -84,6 +79,10 @@ jobs:
             rg_name="${LAB_RG_PREFIX}-$(printf '%02d' "${i}")"
             rgs+=("${rg_name}")
           done
+
+          stack_exists() {
+            az stack sub show --name "${LAB_STACK_NAME}" >/dev/null 2>&1
+          }
 
           deploy_rg_stack() {
             local stack_location
@@ -121,46 +120,6 @@ jobs:
               --yes >/dev/null
           }
 
-          stack_exists() {
-            az stack sub show --name "${LAB_STACK_NAME}" >/dev/null 2>&1
-          }
-
-          to_epoch() {
-            python3 -c "from datetime import datetime, timezone; import sys; value=sys.argv[1]; parsed=datetime.fromisoformat(value.replace('Z', '+00:00')); parsed=parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc); print(int(parsed.timestamp()))" "$1"
-          }
-
-          cleanup_rgs() {
-            if ! stack_exists; then
-              echo "No deployment stack named ${LAB_STACK_NAME} was found."
-              return
-            fi
-
-            local now_epoch
-            now_epoch="$(python3 -c 'import time; print(int(time.time()))')"
-            cleanup_tag="$(az stack sub show --name "${LAB_STACK_NAME}" --query tags.cleanupAfter -o tsv)"
-
-            if [[ -z "${cleanup_tag}" || "${cleanup_tag}" == "null" ]]; then
-              echo "Stack ${LAB_STACK_NAME} has no cleanupAfter tag; skipping cleanup."
-              return
-            fi
-
-            if ! cleanup_epoch="$(to_epoch "${cleanup_tag}")"; then
-              echo "Invalid stack cleanupAfter tag '${cleanup_tag}'."
-              exit 1
-            fi
-
-            if (( cleanup_epoch > now_epoch )); then
-              echo "Cleanup is not due yet for stack ${LAB_STACK_NAME} (cleanupAfter=${cleanup_tag})."
-              return
-            fi
-
-            echo "Deleting stack ${LAB_STACK_NAME} and all managed lab resource groups."
-            az stack sub delete \
-              --name "${LAB_STACK_NAME}" \
-              --action-on-unmanage deleteAll \
-              --yes >/dev/null
-          }
-
           case "${operation}" in
             prepare-rgs)
               deploy_rg_stack
@@ -168,18 +127,18 @@ jobs:
             deploy-example)
               deploy_rg_stack
 
-              if [[ -z "${ADMIN_PUBLIC_KEY}" ]]; then
+              if [[ -z "${AZURE_ADMIN_SSH_PUBLIC_KEY}" ]]; then
                 echo "Repository variable AZURE_ADMIN_SSH_PUBLIC_KEY must be set." >&2
                 exit 1
               fi
-              if [[ -z "${TRUSTED_SSH_SOURCE_CIDR}" ]]; then
+              if [[ -z "${AZURE_TRUSTED_SSH_CIDR}" ]]; then
                 echo "Repository variable AZURE_TRUSTED_SSH_CIDR must be set (for example, your-public-ip/32)." >&2
                 exit 1
               fi
 
               example="${DISPATCH_EXAMPLE:-two-vms-separate-vnets}"
-              template_file="examples/${example}/main.bicep"
-              if [[ ! -f "${template_file}" ]]; then
+              param_file="examples/${example}/main.bicepparam"
+              if [[ ! -f "${param_file}" ]]; then
                 echo "Unsupported example: ${example}" >&2
                 exit 1
               fi
@@ -202,17 +161,11 @@ jobs:
                 exit 1
               fi
 
-              prefix="${example//-/}"
-
               echo "Deploying ${example} into ${rg_target}"
               az deployment group create \
                 --name "${example}-$(date -u +'%Y%m%d%H%M%S')" \
                 --resource-group "${rg_target}" \
-                --template-file "${template_file}" \
-                --parameters adminPublicKey="${ADMIN_PUBLIC_KEY}" namePrefix="${prefix}" trustedSshSourceCidr="${TRUSTED_SSH_SOURCE_CIDR}" >/dev/null
-              ;;
-            cleanup-now)
-              cleanup_rgs
+                --parameters "${param_file}" >/dev/null
               ;;
             *)
               echo "Unsupported operation: ${operation}" >&2
