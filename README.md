@@ -26,6 +26,7 @@ Set the following **repository secret**:
 Set the following **repository variables**:
 
 - `AZURE_ADMIN_SSH_PUBLIC_KEY`: SSH public key deployed to both VMs.
+- `AZURE_TRUSTED_SSH_CIDR`: trusted source CIDR for SSH to lab VMs (for example `203.0.113.10/32`).
 - `LAB_STACK_NAME` (optional, default `test-azure-lab-stack`): deployment stack name used to manage lab resource groups.
 - `LAB_RG_PREFIX` (optional, default `azlearn-rg`): prefix used for lab resource groups.
 - `LAB_RG_COUNT` (optional, default `3`): number of managed lab resource groups to maintain.
@@ -44,6 +45,7 @@ Manual (`workflow_dispatch`) inputs:
   - `two-vms-separate-vnets`
   - `two-vms-shared-vnet`
 - `location`: Azure region (default `eastus`)
+  - Used when first creating managed RGs. Existing managed RGs keep their original region.
 - `resource_group`: target managed lab RG (default `azlearn-rg-01`)
 
 Automatic cleanup:

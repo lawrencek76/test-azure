@@ -65,6 +65,7 @@ jobs:
           DISPATCH_LOCATION: ${{ github.event.inputs.location }}
           DISPATCH_RESOURCE_GROUP: ${{ github.event.inputs.resource_group }}
           ADMIN_PUBLIC_KEY: ${{ vars.AZURE_ADMIN_SSH_PUBLIC_KEY }}
+          TRUSTED_SSH_SOURCE_CIDR: ${{ vars.AZURE_TRUSTED_SSH_CIDR }}
         run: |
           set -euo pipefail
 
@@ -171,6 +172,10 @@ jobs:
                 echo "Repository variable AZURE_ADMIN_SSH_PUBLIC_KEY must be set." >&2
                 exit 1
               fi
+              if [[ -z "${TRUSTED_SSH_SOURCE_CIDR}" ]]; then
+                echo "Repository variable AZURE_TRUSTED_SSH_CIDR must be set (for example, your-public-ip/32)." >&2
+                exit 1
+              fi
 
               example="${DISPATCH_EXAMPLE:-two-vms-separate-vnets}"
               template_file="examples/${example}/main.bicep"
@@ -192,6 +197,10 @@ jobs:
                 echo "resource_group must be one of managed lab groups: ${rgs[*]}" >&2
                 exit 1
               fi
+              if ! az group show --name "${rg_target}" >/dev/null 2>&1; then
+                echo "Managed resource group ${rg_target} does not exist yet. Run operation=prepare-rgs first." >&2
+                exit 1
+              fi
 
               prefix="${example//-/}"
 
@@ -200,7 +209,7 @@ jobs:
                 --name "${example}-$(date -u +'%Y%m%d%H%M%S')" \
                 --resource-group "${rg_target}" \
                 --template-file "${template_file}" \
-                --parameters adminPublicKey="${ADMIN_PUBLIC_KEY}" namePrefix="${prefix}" >/dev/null
+                --parameters adminPublicKey="${ADMIN_PUBLIC_KEY}" namePrefix="${prefix}" trustedSshSourceCidr="${TRUSTED_SSH_SOURCE_CIDR}" >/dev/null
               ;;
             cleanup-now)
               cleanup_rgs

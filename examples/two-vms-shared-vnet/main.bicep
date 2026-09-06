@@ -6,11 +6,15 @@ param adminPublicKey string
 @description('Resource name prefix for this example deployment.')
 param namePrefix string = 'sharedvnet'
 
+@description('Trusted source CIDR allowed to SSH to lab hosts (for example, 203.0.113.10/32).')
+param trustedSshSourceCidr string
+
 module networkLab '../../infra/modules/two-vm-network-lab.bicep' = {
   name: 'two-vms-shared-vnet'
   params: {
     adminPublicKey: adminPublicKey
     namePrefix: namePrefix
+    trustedSshSourceCidr: trustedSshSourceCidr
     sameVnet: true
     networkLayout: {
       hostAVnetCidr: '10.20.0.0/16'

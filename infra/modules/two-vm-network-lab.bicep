@@ -11,6 +11,9 @@ param adminPublicKey string
 @description('Admin username for both Linux VMs.')
 param adminUsername string = 'azureuser'
 
+@description('Trusted source CIDR allowed to SSH to lab hosts (for example, 203.0.113.10/32).')
+param trustedSshSourceCidr string
+
 @description('Spot VM size to use for both hosts.')
 param vmSize string = 'Standard_B1ls'
 
@@ -67,7 +70,7 @@ resource hostANsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
           direction: 'Inbound'
           priority: 100
           protocol: 'Tcp'
-          sourceAddressPrefix: '*'
+          sourceAddressPrefix: trustedSshSourceCidr
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
           destinationPortRange: '22'
@@ -89,7 +92,7 @@ resource hostBNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
           direction: 'Inbound'
           priority: 100
           protocol: 'Tcp'
-          sourceAddressPrefix: '*'
+          sourceAddressPrefix: trustedSshSourceCidr
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
           destinationPortRange: '22'
@@ -238,11 +241,7 @@ resource nics 'Microsoft.Network/networkInterfaces@2024-05-01' = [for (config, i
           privateIPAllocationMethod: 'Static'
           privateIPAddress: config.privateIp
           subnet: {
-            id: sameVnet
-              ? resourceId('Microsoft.Network/virtualNetworks/subnets', sharedVnet.name, config.subnetName)
-              : i == 0
-                  ? resourceId('Microsoft.Network/virtualNetworks/subnets', hostAVnet.name, config.subnetName)
-                  : resourceId('Microsoft.Network/virtualNetworks/subnets', hostBVnet.name, config.subnetName)
+            id: resourceId('Microsoft.Network/virtualNetworks/subnets', config.vnetName, config.subnetName)
           }
           publicIPAddress: {
             id: publicIps[i].id
