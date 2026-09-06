@@ -139,7 +139,7 @@ resource sharedVnet 'Microsoft.Network/virtualNetworks@2024-05-01' = if (sameVne
       properties: {
         addressPrefix: config.subnetPrefix
         networkSecurityGroup: {
-          id: config.name == 'hosta' ? hostANsg.id : hostBNsg.id
+          id: resourceId('Microsoft.Network/networkSecurityGroups', config.nsgName)
         }
       }
     }]

@@ -87,10 +87,20 @@ jobs:
           deploy_rg_stack() {
             local stack_location
             stack_location="${location}"
+            local deployment_location
+            deployment_location="${location}"
             if stack_exists; then
               existing_stack_location="$(az stack sub show --name "${LAB_STACK_NAME}" --query location -o tsv)"
               if [[ -n "${existing_stack_location}" && "${existing_stack_location}" != "null" ]]; then
                 stack_location="${existing_stack_location}"
+              fi
+
+              existing_rg_location="$(az group show --name "${rgs[0]}" --query location -o tsv 2>/dev/null || true)"
+              if [[ -n "${existing_rg_location}" && "${existing_rg_location}" != "null" ]]; then
+                deployment_location="${existing_rg_location}"
+                if [[ "${deployment_location}" != "${location}" ]]; then
+                  echo "Using existing managed RG location '${deployment_location}' instead of requested '${location}'."
+                fi
               fi
             fi
 
@@ -101,7 +111,7 @@ jobs:
               --parameters \
                 rgPrefix="${LAB_RG_PREFIX}" \
                 rgCount="${LAB_RG_COUNT}" \
-                location="${stack_location}" \
+                location="${deployment_location}" \
                 managedByTag="${LAB_TAG}" \
                 cleanupAfter="${cleanup_after}" \
               --tags managedBy="${LAB_TAG}" cleanupAfter="${cleanup_after}" \

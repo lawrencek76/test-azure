@@ -21,6 +21,7 @@ Both examples use:
 Set the following **repository secret**:
 
 - `AZURE_CREDENTIALS`: JSON for an Azure service principal with rights to create/delete resource groups and deploy resources in your subscription.
+  - Ensure this principal has access to the subscription where lab resources should be created, since workflows call both `az stack sub` and `az deployment group create` in that subscription context.
 
 Set the following **repository variables**:
 
