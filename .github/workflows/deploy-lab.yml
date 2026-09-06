@@ -102,9 +102,26 @@ jobs:
           }
 
           cleanup_rgs() {
-            mapfile -t due_groups < <(az group list \
+            local now_epoch
+            now_epoch="$(date -u +%s)"
+            local due_groups=()
+
+            while IFS=$'\t' read -r rg_name cleanup_tag; do
+              if [[ -z "${rg_name}" || -z "${cleanup_tag:-}" ]]; then
+                continue
+              fi
+
+              if ! cleanup_epoch="$(date -u -d "${cleanup_tag}" +%s 2>/dev/null)"; then
+                echo "Skipping ${rg_name}: invalid cleanupAfter tag '${cleanup_tag}'"
+                continue
+              fi
+
+              if (( cleanup_epoch <= now_epoch )); then
+                due_groups+=("${rg_name}")
+              fi
+            done < <(az group list \
               --tag managedBy="${LAB_TAG}" \
-              --query "[?tags.cleanupAfter!=null && tags.cleanupAfter<='${now_utc}'].name" \
+              --query "[].{name:name,cleanupAfter:tags.cleanupAfter}" \
               -o tsv)
 
             if [[ "${#due_groups[@]}" -eq 0 ]]; then
