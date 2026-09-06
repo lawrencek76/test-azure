@@ -45,7 +45,8 @@ Manual (`workflow_dispatch`) inputs:
 
 Automatic cleanup:
 - The same workflow runs hourly on schedule.
-- Every deployment refreshes RG tags with `cleanupAfter = now + 24h`.
+- `prepare-rgs` refreshes all managed RG tags with `cleanupAfter = now + 24h`.
+- `deploy-example` refreshes `cleanupAfter` only for the target RG.
 - Scheduled cleanup removes tagged lab RGs when `cleanupAfter` is reached.
 
 ### 2) Bicep validation CI
@@ -57,6 +58,6 @@ Workflow: `.github/workflows/bicep-validate.yml`
 ## Diagnostic exercise flow
 
 1. Run **Deploy or Cleanup Azure Lab** with `operation=deploy-example` and choose an example.
-2. SSH to `hosta` and `hostb` (public IPs are deployment outputs).
+2. SSH to `hosta` and `hostb` (public and private IPs are deployment outputs).
 3. From `hosta`, test HTTP to `hostb` private IP on port 80 (`curl http://<hostb-private-ip>`).
 4. Observe failure and use Azure portal tools (effective security rules, NSG flow logs, connection troubleshoot) to identify the deny rule.

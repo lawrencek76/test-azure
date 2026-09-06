@@ -23,4 +23,6 @@ module networkLab '../../infra/modules/two-vm-network-lab.bicep' = {
 
 output hostAPublicIp string = networkLab.outputs.hostAPublicIp
 output hostBPublicIp string = networkLab.outputs.hostBPublicIp
+output hostAPrivateIp string = networkLab.outputs.hostAPrivateIp
+output hostBPrivateIp string = networkLab.outputs.hostBPrivateIp
 output blockedFlow string = networkLab.outputs.blockedFlow

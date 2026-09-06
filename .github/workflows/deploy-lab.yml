@@ -88,11 +88,17 @@ jobs:
                   --tags managedBy="${LAB_TAG}" >/dev/null
                 echo "Created ${rg}"
               fi
-
               az group update \
                 --name "${rg}" \
-                --set tags.managedBy="${LAB_TAG}" tags.cleanupAfter="${cleanup_after}" >/dev/null
+                --set tags.managedBy="${LAB_TAG}" >/dev/null
             done
+          }
+
+          set_cleanup_tag() {
+            local rg_name="$1"
+            az group update \
+              --name "${rg_name}" \
+              --set tags.managedBy="${LAB_TAG}" tags.cleanupAfter="${cleanup_after}" >/dev/null
           }
 
           cleanup_rgs() {
@@ -115,6 +121,9 @@ jobs:
           case "${operation}" in
             prepare-rgs)
               ensure_rgs
+              for rg in "${rgs[@]}"; do
+                set_cleanup_tag "${rg}"
+              done
               ;;
             deploy-example)
               ensure_rgs
@@ -127,12 +136,12 @@ jobs:
               example="${DISPATCH_EXAMPLE:-two-vms-separate-vnets}"
               case "${example}" in
                 two-vms-separate-vnets)
-                  rg_target="${LAB_RG_PREFIX}-01"
+                  rg_index=0
                   template_file="examples/two-vms-separate-vnets/main.bicep"
                   prefix="separatevnet"
                   ;;
                 two-vms-shared-vnet)
-                  rg_target="${LAB_RG_PREFIX}-02"
+                  rg_index=1
                   template_file="examples/two-vms-shared-vnet/main.bicep"
                   prefix="sharedvnet"
                   ;;
@@ -141,6 +150,14 @@ jobs:
                   exit 1
                   ;;
               esac
+
+              if (( rg_index >= ${#rgs[@]} )); then
+                echo "LAB_RG_COUNT=${LAB_RG_COUNT} is too small for ${example}. Increase LAB_RG_COUNT to at least $((rg_index + 1))." >&2
+                exit 1
+              fi
+
+              rg_target="${rgs[${rg_index}]}"
+              set_cleanup_tag "${rg_target}"
 
               echo "Deploying ${example} into ${rg_target}"
               az deployment group create \
