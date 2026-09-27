@@ -12,3 +12,4 @@
 - Cleanup scheduling is handled in a dedicated `.github/workflows/cleanup-lab.yml` workflow (daily 05:00 UTC), separate from deploy workflow.
 - Both examples are standalone templates in their own `main.bicep` files and no longer use a shared module.
 - Both labs use dual-stack (IPv4 + IPv6) VNets/subnets so VM NICs have a required primary IPv4 configuration, plus IPv6-only public IP addresses.
+- All lab subnets set `defaultOutboundAccess: false` (private subnets). Explicit internet egress is IPv6 via the free NIC-attached PIP; no NAT gateway or IPv4 PIP is deployed to keep cost at $0 extra. IPv4 is VNet/peering-local only.

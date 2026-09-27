@@ -22,8 +22,6 @@ var trustedSshSourceCidrs = map(split(trustedSshSourceCidr, ','), cidr => trim(c
 var trustedSshV4Cidrs = filter(trustedSshSourceCidrs, cidr => !contains(cidr, ':'))
 var trustedSshV6Cidrs = filter(trustedSshSourceCidrs, cidr => contains(cidr, ':'))
 
-// NSG rules cannot mix IPv4 and IPv6 prefixes, so SSH allow rules are split by family.
-// Either family list may be empty (for example a v6-only value), in which case its rule is omitted.
 var sshAllowRules = concat(
   empty(trustedSshV4Cidrs) ? [] : [
     {
@@ -180,6 +178,7 @@ resource hostAVnet 'Microsoft.Network/virtualNetworks@2024-05-01' = {
             hostA.subnetCidrV4
             hostA.subnetCidr
           ]
+          defaultOutboundAccess: false
           networkSecurityGroup: {
             id: hostANsg.id
           }
@@ -207,6 +206,7 @@ resource hostBVnet 'Microsoft.Network/virtualNetworks@2024-05-01' = {
             hostB.subnetCidrV4
             hostB.subnetCidr
           ]
+          defaultOutboundAccess: false
           networkSecurityGroup: {
             id: hostBNsg.id
           }

@@ -14,7 +14,8 @@ Both examples use:
 - Standard SSD OS disk
 - Ubuntu 22.04 image with network troubleshooting tools (curl, dnsutils, iperf3, ping, traceroute, netcat)
 - Dual-stack (IPv4 + IPv6) VNets/subnets, because Azure NICs require a primary IPv4 configuration
-- IPv6-only Standard public IP resources
+- IPv6-only Standard public IP resources (free; IPv4 PIPs and NAT gateways would add hourly charges)
+- Private subnets (`defaultOutboundAccess: false`) so VMs never rely on implicit default outbound access. Explicit internet egress is IPv6 via the NIC-attached PIP; IPv4 is VNet/peering-local only. Redeploy (or stop/deallocate) existing VMs after this change for it to take effect.
 
 ## GitHub configuration required (OIDC, no secret login)
 
