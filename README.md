@@ -31,7 +31,7 @@ Set these **repository variables** (the 3 values needed for no-secret Azure logi
 Also set these **repository variables**:
 
 - `AZURE_ADMIN_SSH_PUBLIC_KEY`: SSH public key deployed to both VMs.
-- `AZURE_TRUSTED_SSH_CIDR`: trusted source CIDR for SSH to lab VMs (for example `2001:db8::1/128`).
+- `AZURE_TRUSTED_SSH_CIDR`: trusted source CIDRs for SSH to lab VMs, comma-separated (for example `203.0.113.5/32,2001:db8::1/128`). A single CIDR also works.
 - `LAB_STACK_NAME` (optional, default `test-azure-lab-stack`): deployment stack name used to manage lab resource groups.
 - `LAB_RG_COUNT` (optional, default `3`): number of managed lab resource groups to maintain (`az-learn-01`, `az-learn-02`, ...). The `az-learn-` prefix is hardcoded.
 
@@ -48,7 +48,7 @@ ssh-keygen -t ed25519 -C "test-azure-lab" -f ~/.ssh/test-azure-lab
 cat ~/.ssh/test-azure-lab.pub
 ```
 
-For IPv6-only public IP labs, set `AZURE_TRUSTED_SSH_CIDR` to an IPv6 CIDR (for example `2001:db8::1/128`).
+For IPv6-only public IP labs, include your IPv6 address (for example `2001:db8::1/128`). To allow both stacks, set `AZURE_TRUSTED_SSH_CIDR` to a comma-separated pair (for example `203.0.113.5/32,2001:db8::1/128`).
 
 ## Helper script to set repository variables
 

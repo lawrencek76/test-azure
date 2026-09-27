@@ -125,7 +125,7 @@ jobs:
                 exit 1
               fi
               if [[ -z "${AZURE_TRUSTED_SSH_CIDR}" ]]; then
-                echo "Repository variable AZURE_TRUSTED_SSH_CIDR must be set (for example, your-public-ip/32)." >&2
+                echo "Repository variable AZURE_TRUSTED_SSH_CIDR must be set (comma-separated, for example your-public-ip/32,your-public-ip/128)." >&2
                 exit 1
               fi
 

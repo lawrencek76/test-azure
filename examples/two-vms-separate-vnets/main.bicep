@@ -6,7 +6,7 @@ param adminPublicKey string
 @description('Resource name prefix for this example deployment.')
 param namePrefix string = 'separatevnet'
 
-@description('Trusted source CIDR allowed to SSH to lab hosts (IPv6 CIDR recommended).')
+@description('Trusted source CIDRs allowed to SSH to lab hosts. Comma-separated IPv4 and/or IPv6 CIDRs (for example "203.0.113.5/32,2001:db8::1/128").')
 param trustedSshSourceCidr string
 
 @description('Azure region for all resources.')
@@ -17,6 +17,8 @@ param adminUsername string = 'azureuser'
 
 @description('Spot VM size to use for both hosts.')
 param vmSize string = 'Standard_B1ls'
+
+var trustedSshSourceCidrs = map(split(trustedSshSourceCidr, ','), cidr => trim(cidr))
 
 var hostA = {
   name: 'hosta'
@@ -60,7 +62,7 @@ resource hostANsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
           direction: 'Inbound'
           priority: 100
           protocol: 'Tcp'
-          sourceAddressPrefix: trustedSshSourceCidr
+          sourceAddressPrefixes: trustedSshSourceCidrs
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
           destinationPortRange: '22'
@@ -82,7 +84,7 @@ resource hostBNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
           direction: 'Inbound'
           priority: 100
           protocol: 'Tcp'
-          sourceAddressPrefix: trustedSshSourceCidr
+          sourceAddressPrefixes: trustedSshSourceCidrs
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
           destinationPortRange: '22'
