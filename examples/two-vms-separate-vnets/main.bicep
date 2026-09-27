@@ -64,11 +64,11 @@ var hostA = {
   nsgName: '${namePrefix}-hosta-nsg'
   pipName: '${namePrefix}-hosta-pip'
   nicName: '${namePrefix}-hosta-nic'
-  privateIpv4: '10.10.1.4'
+  privateIpv4: '10.42.10.4'
   privateIp: 'fd00:10:1::4'
-  vnetCidrV4: '10.10.0.0/16'
+  vnetCidrV4: '10.42.10.0/24'
   vnetCidr: 'fd00:10::/48'
-  subnetCidrV4: '10.10.1.0/24'
+  subnetCidrV4: '10.42.10.0/24'
   subnetCidr: 'fd00:10:1::/64'
 }
 
@@ -79,11 +79,11 @@ var hostB = {
   nsgName: '${namePrefix}-hostb-nsg'
   pipName: '${namePrefix}-hostb-pip'
   nicName: '${namePrefix}-hostb-nic'
-  privateIpv4: '10.11.1.4'
+  privateIpv4: '10.42.20.4'
   privateIp: 'fd00:11:1::4'
-  vnetCidrV4: '10.11.0.0/16'
+  vnetCidrV4: '10.42.20.0/24'
   vnetCidr: 'fd00:11::/48'
-  subnetCidrV4: '10.11.1.0/24'
+  subnetCidrV4: '10.42.20.0/24'
   subnetCidr: 'fd00:11:1::/64'
 }
 
@@ -267,6 +267,9 @@ resource hostBPip 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
 resource hostANic 'Microsoft.Network/networkInterfaces@2024-05-01' = {
   name: hostA.nicName
   location: location
+  dependsOn: [
+    hostAVnet
+  ]
   properties: {
     ipConfigurations: [
       {
@@ -303,6 +306,9 @@ resource hostANic 'Microsoft.Network/networkInterfaces@2024-05-01' = {
 resource hostBNic 'Microsoft.Network/networkInterfaces@2024-05-01' = {
   name: hostB.nicName
   location: location
+  dependsOn: [
+    hostBVnet
+  ]
   properties: {
     ipConfigurations: [
       {
