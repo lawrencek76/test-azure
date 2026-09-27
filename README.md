@@ -10,9 +10,7 @@ Azure learning repo with Bicep examples designed for experimentation, troublesho
   Same troubleshooting scenario, but both VMs are in one dual-stack VNet with separate subnets.
 
 Both examples use:
-- Spot VM priority
-- Eviction policy `Delete`
-- `maxPrice = -1`
+- Regular (on-demand) VM priority
 - Standard SSD OS disk
 - Ubuntu 22.04 image with network troubleshooting tools (curl, dnsutils, iperf3, ping, traceroute, netcat)
 - Dual-stack (IPv4 + IPv6) VNets/subnets, because Azure NICs require a primary IPv4 configuration

@@ -15,7 +15,7 @@ param location string = resourceGroup().location
 @description('Admin username for both Linux VMs.')
 param adminUsername string = 'azureuser'
 
-@description('Spot VM size to use for both hosts.')
+@description('VM size to use for both hosts.')
 param vmSize string = 'Standard_B2ats_v2'
 
 var trustedSshSourceCidrs = map(split(trustedSshSourceCidr, ','), cidr => trim(cidr))
@@ -280,11 +280,6 @@ resource hostAVm 'Microsoft.Compute/virtualMachines@2024-07-01' = {
   name: '${namePrefix}-${hostA.name}'
   location: location
   properties: {
-    priority: 'Spot'
-    evictionPolicy: 'Delete'
-    billingProfile: {
-      maxPrice: -1
-    }
     hardwareProfile: {
       vmSize: vmSize
     }
@@ -346,11 +341,6 @@ resource hostBVm 'Microsoft.Compute/virtualMachines@2024-07-01' = {
   name: '${namePrefix}-${hostB.name}'
   location: location
   properties: {
-    priority: 'Spot'
-    evictionPolicy: 'Delete'
-    billingProfile: {
-      maxPrice: -1
-    }
     hardwareProfile: {
       vmSize: vmSize
     }
