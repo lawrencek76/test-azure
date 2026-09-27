@@ -48,9 +48,6 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Ensure Bicep is available
-        run: az bicep install
-
       - name: Prepare or deploy lab
         shell: bash
         env:

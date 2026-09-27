@@ -32,9 +32,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Bicep
-        uses: azure/setup-bicep@v2
-
       - name: Build and lint all Bicep files
         shell: bash
         run: |
