@@ -16,7 +16,7 @@ param location string = resourceGroup().location
 param adminUsername string = 'azureuser'
 
 @description('Spot VM size to use for both hosts.')
-param vmSize string = 'Standard_B1ls'
+param vmSize string = 'Standard_B2ats_v2'
 
 var trustedSshSourceCidrs = map(split(trustedSshSourceCidr, ','), cidr => trim(cidr))
 
