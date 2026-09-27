@@ -1,0 +1,54 @@
+name: Cleanup Azure Lab
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 5 * * *'
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  LAB_STACK_NAME: ${{ vars.LAB_STACK_NAME || 'test-azure-lab-stack' }}
+
+jobs:
+  cleanup-lab:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Cleanup stack if due
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! az stack sub show --name "${LAB_STACK_NAME}" >/dev/null 2>&1; then
+            echo "No deployment stack named ${LAB_STACK_NAME} was found."
+            exit 0
+          fi
+
+          cleanup_tag="$(az stack sub show --name "${LAB_STACK_NAME}" --query tags.cleanupAfter -o tsv)"
+          if [[ -z "${cleanup_tag}" || "${cleanup_tag}" == "null" ]]; then
+            echo "Stack ${LAB_STACK_NAME} has no cleanupAfter tag; skipping cleanup."
+            exit 0
+          fi
+
+          cleanup_epoch="$(python3 -c "from datetime import datetime, timezone; import sys; value=sys.argv[1]; parsed=datetime.fromisoformat(value.replace('Z', '+00:00')); parsed=parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc); print(int(parsed.timestamp()))" "${cleanup_tag}")"
+          now_epoch="$(python3 -c 'import time; print(int(time.time()))')"
+
+          if (( cleanup_epoch > now_epoch )); then
+            echo "Cleanup is not due yet for stack ${LAB_STACK_NAME} (cleanupAfter=${cleanup_tag})."
+            exit 0
+          fi
+
+          echo "Deleting stack ${LAB_STACK_NAME} and all managed lab resource groups."
+          az stack sub delete \
+            --name "${LAB_STACK_NAME}" \
+            --action-on-unmanage deleteAll \
+            --yes >/dev/null
