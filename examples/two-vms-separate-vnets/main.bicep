@@ -65,11 +65,11 @@ var hostA = {
   pipName: '${namePrefix}-hosta-pip'
   nicName: '${namePrefix}-hosta-nic'
   privateIpv4: '10.42.10.4'
-  privateIp: 'fd00:10:1::4'
+  privateIp: 'fd00:10:0:1::4'
   vnetCidrV4: '10.42.10.0/24'
   vnetCidr: 'fd00:10::/48'
   subnetCidrV4: '10.42.10.0/24'
-  subnetCidr: 'fd00:10:1::/64'
+  subnetCidr: 'fd00:10:0:1::/64'
 }
 
 var hostB = {
@@ -80,11 +80,11 @@ var hostB = {
   pipName: '${namePrefix}-hostb-pip'
   nicName: '${namePrefix}-hostb-nic'
   privateIpv4: '10.42.20.4'
-  privateIp: 'fd00:11:1::4'
+  privateIp: 'fd00:11:0:1::4'
   vnetCidrV4: '10.42.20.0/24'
   vnetCidr: 'fd00:11::/48'
   subnetCidrV4: '10.42.20.0/24'
-  subnetCidr: 'fd00:11:1::/64'
+  subnetCidr: 'fd00:11:0:1::/64'
 }
 
 resource hostANsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {

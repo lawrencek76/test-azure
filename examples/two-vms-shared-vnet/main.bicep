@@ -64,9 +64,9 @@ var hostA = {
   pipName: '${namePrefix}-hosta-pip'
   nicName: '${namePrefix}-hosta-nic'
   privateIpv4: '10.20.1.4'
-  privateIp: 'fd00:20:1::4'
+  privateIp: 'fd00:20:0:1::4'
   subnetCidrV4: '10.20.1.0/24'
-  subnetCidr: 'fd00:20:1::/64'
+  subnetCidr: 'fd00:20:0:1::/64'
 }
 
 var hostB = {
@@ -76,9 +76,9 @@ var hostB = {
   pipName: '${namePrefix}-hostb-pip'
   nicName: '${namePrefix}-hostb-nic'
   privateIpv4: '10.20.2.4'
-  privateIp: 'fd00:20:2::4'
+  privateIp: 'fd00:20:0:2::4'
   subnetCidrV4: '10.20.2.0/24'
-  subnetCidr: 'fd00:20:2::/64'
+  subnetCidr: 'fd00:20:0:2::/64'
 }
 
 var vnetName = '${namePrefix}-shared-vnet'
