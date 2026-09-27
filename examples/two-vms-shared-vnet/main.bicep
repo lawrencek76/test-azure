@@ -19,6 +19,43 @@ param adminUsername string = 'azureuser'
 param vmSize string = 'Standard_B2ats_v2'
 
 var trustedSshSourceCidrs = map(split(trustedSshSourceCidr, ','), cidr => trim(cidr))
+var trustedSshV4Cidrs = filter(trustedSshSourceCidrs, cidr => !contains(cidr, ':'))
+var trustedSshV6Cidrs = filter(trustedSshSourceCidrs, cidr => contains(cidr, ':'))
+
+// NSG rules cannot mix IPv4 and IPv6 prefixes, so SSH allow rules are split by family.
+// Either family list may be empty (for example a v6-only value), in which case its rule is omitted.
+var sshAllowRules = concat(
+  empty(trustedSshV4Cidrs) ? [] : [
+    {
+      name: 'allow-ssh-v4'
+      properties: {
+        access: 'Allow'
+        direction: 'Inbound'
+        priority: 100
+        protocol: 'Tcp'
+        sourceAddressPrefixes: trustedSshV4Cidrs
+        sourcePortRange: '*'
+        destinationAddressPrefix: '*'
+        destinationPortRange: '22'
+      }
+    }
+  ],
+  empty(trustedSshV6Cidrs) ? [] : [
+    {
+      name: 'allow-ssh-v6'
+      properties: {
+        access: 'Allow'
+        direction: 'Inbound'
+        priority: 110
+        protocol: 'Tcp'
+        sourceAddressPrefixes: trustedSshV6Cidrs
+        sourcePortRange: '*'
+        destinationAddressPrefix: '*'
+        destinationPortRange: '22'
+      }
+    }
+  ]
+)
 
 var hostA = {
   name: 'hosta'
@@ -52,21 +89,7 @@ resource hostANsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
   name: hostA.nsgName
   location: location
   properties: {
-    securityRules: [
-      {
-        name: 'allow-ssh'
-        properties: {
-          access: 'Allow'
-          direction: 'Inbound'
-          priority: 100
-          protocol: 'Tcp'
-          sourceAddressPrefixes: trustedSshSourceCidrs
-          sourcePortRange: '*'
-          destinationAddressPrefix: '*'
-          destinationPortRange: '22'
-        }
-      }
-    ]
+    securityRules: sshAllowRules
   }
 }
 
@@ -74,31 +97,28 @@ resource hostBNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
   name: hostB.nsgName
   location: location
   properties: {
-    securityRules: [
+    securityRules: concat(sshAllowRules, [
       {
-        name: 'allow-ssh'
-        properties: {
-          access: 'Allow'
-          direction: 'Inbound'
-          priority: 100
-          protocol: 'Tcp'
-          sourceAddressPrefixes: trustedSshSourceCidrs
-          sourcePortRange: '*'
-          destinationAddressPrefix: '*'
-          destinationPortRange: '22'
-        }
-      }
-      {
-        name: 'deny-http-from-hosta'
+        name: 'deny-http-from-hosta-v4'
         properties: {
           access: 'Deny'
           direction: 'Inbound'
           priority: 200
           protocol: 'Tcp'
-          sourceAddressPrefixes: [
-            hostA.privateIpv4
-            hostA.privateIp
-          ]
+          sourceAddressPrefix: hostA.privateIpv4
+          sourcePortRange: '*'
+          destinationAddressPrefix: '*'
+          destinationPortRange: '80'
+        }
+      }
+      {
+        name: 'deny-http-from-hosta-v6'
+        properties: {
+          access: 'Deny'
+          direction: 'Inbound'
+          priority: 210
+          protocol: 'Tcp'
+          sourceAddressPrefix: hostA.privateIp
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
           destinationPortRange: '80'
@@ -117,7 +137,7 @@ resource hostBNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
           destinationPortRange: '80'
         }
       }
-    ]
+    ])
   }
 }
 
@@ -393,4 +413,4 @@ output hostAPublicIp string? = hostAPip.properties.ipAddress
 output hostBPublicIp string? = hostBPip.properties.ipAddress
 output hostAPrivateIp string = hostA.privateIp
 output hostBPrivateIp string = hostB.privateIp
-output blockedFlow string = 'Traffic from ${hostA.privateIp} to ${hostB.privateIp}:80 is denied by ${hostBNsg.name}/deny-http-from-hosta'
+output blockedFlow string = 'Traffic from ${hostA.privateIp} to ${hostB.privateIp}:80 is denied by ${hostBNsg.name}/deny-http-from-hosta-v6'

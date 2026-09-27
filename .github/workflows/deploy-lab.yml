@@ -22,7 +22,7 @@ on:
       location:
         description: Azure region for resource groups and deployments
         required: false
-        default: eastus
+        default: centralus
         type: string
 
 permissions:
@@ -60,7 +60,7 @@ jobs:
           set -euo pipefail
 
           operation="${DISPATCH_OPERATION:-deploy-example}"
-          location="${DISPATCH_LOCATION:-eastus}"
+          location="${DISPATCH_LOCATION:-centralus}"
           cleanup_after="$(python3 -c "from datetime import datetime, timezone, timedelta; print((datetime.now(timezone.utc) + timedelta(hours=24)).strftime('%Y-%m-%dT%H:%M:%SZ'))")"
 
           rg_prefix="az-learn"
