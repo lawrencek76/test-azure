@@ -29,25 +29,66 @@ Set these **repository variables** (the 3 values needed for no-secret Azure logi
 
 Also set these **repository variables**:
 
-- `AZURE_ADMIN_SSH_PUBLIC_KEY`: SSH public key deployed to both VMs.
+- `AZURE_ENTRA_ADMIN_OBJECT_ID` (optional): Entra ID object ID granted **Virtual Machine Administrator Login** on both VMs. Defaults in code to the lab group `2ad450d1-8db6-4198-87a4-8d30febdbe4a`; set the variable only to override. Object IDs are identifiers, not secrets, so keeping the default in code is safe.
+- `AZURE_ADMIN_SSH_PUBLIC_KEY` (optional): SSH public key also deployed to both VMs. Empty means Entra ID login only.
 - `AZURE_TRUSTED_SSH_CIDR`: trusted source CIDRs for SSH to lab VMs, comma-separated (for example `203.0.113.5/32,2001:db8::1/128`). A single CIDR also works.
 - `LAB_STACK_NAME` (optional, default `test-azure-lab-stack`): deployment stack name used to manage lab resource groups.
 - `LAB_RG_COUNT` (optional, default `3`): number of managed lab resource groups to maintain (`az-learn-01`, `az-learn-02`, ...). The `az-learn-` prefix is hardcoded.
 
 ### Required Azure app setup for OIDC
 
-Create an Entra app/service principal, grant it rights in the target subscription, and add a **Federated credential** for this GitHub repository/branch so Actions can exchange the GitHub OIDC token for Azure access.
+Create an Entra app/service principal, grant it rights in the target subscription, and add a **Federated credential** for this GitHub repository/branch so Actions can exchange the GitHub OIDC token for Azure access. The deployment identity must also be able to create role assignments (for example `Role Based Access Control Administrator` or `Owner`) because the templates assign **Virtual Machine Administrator Login** on each VM.
 
-## SSH key generation
+## Entra ID login setup (SSH key optional)
 
-Generate a key pair locally and set the public key text into `AZURE_ADMIN_SSH_PUBLIC_KEY`:
+VMs authenticate with Microsoft Entra ID via the `AADSSHLoginForLinux` extension plus a **Virtual Machine Administrator Login** role assignment created by the template. An SSH public key can additionally be deployed by setting `AZURE_ADMIN_SSH_PUBLIC_KEY`; leave it empty for Entra-only login.
+
+Get the object ID to put in `AZURE_ENTRA_ADMIN_OBJECT_ID` (only needed to override the group default baked into the `.bicepparam` files):
 
 ```bash
-ssh-keygen -t ed25519 -C "test-azure-lab" -f ~/.ssh/test-azure-lab
-cat ~/.ssh/test-azure-lab.pub
+az ad signed-in-user show --query id -o tsv
+```
+
+For a group (all members can log in), use the group object ID and set `entraAdminPrincipalType` to `Group` in the example `.bicepparam` file (already the default):
+
+```bash
+az ad group show --group "lab-admins" --query id -o tsv
 ```
 
 For IPv6-only public IP labs, include your IPv6 address (for example `2001:db8::1/128`). To allow both stacks, set `AZURE_TRUSTED_SSH_CIDR` to a comma-separated pair (for example `203.0.113.5/32,2001:db8::1/128`).
+
+## Connect with Entra ID (IPv6 example)
+
+```bash
+az extension add --name ssh
+az login
+az ssh vm --ip <host-ipv6>
+```
+
+Concrete example (IPv6 address is the `hostAPublicIp` / `hostBPublicIp` deployment output):
+
+```bash
+az ssh vm --ip 2603:1030:205:0:0:0:0:4
+```
+
+By VM name instead of IP:
+
+```bash
+az ssh vm --resource-group az-learn-01 --name sharedvnet-hosta
+```
+
+For plain OpenSSH clients, export a config first and then connect:
+
+```bash
+az ssh config --ip <host-ipv6> --file ./sshconfig
+ssh -F ./sshconfig <host-ipv6>
+```
+
+With an SSH key deployed (`AZURE_ADMIN_SSH_PUBLIC_KEY` set), key login also works (note brackets for IPv6):
+
+```bash
+ssh -i ~/.ssh/test-azure-lab azureuser@[<host-ipv6>]
+```
 
 ## Helper script to set repository variables
 
@@ -99,6 +140,6 @@ Workflow: `.github/workflows/bicep-validate.yml`
 ## Diagnostic exercise flow
 
 1. Run **Deploy Azure Lab** with `operation=deploy-example` and choose an example.
-2. SSH to `hosta` and `hostb` (public and private IPs are deployment outputs).
+2. Connect with Entra ID (`az ssh vm --ip <hostAPublicIp>` and `az ssh vm --ip <hostBPublicIp>`; public and private IPs are deployment outputs).
 3. From `hosta`, test HTTP to `hostb` private IP on port 80 (`curl http://<hostb-private-ip>`).
 4. Observe failure and use Azure portal tools (effective security rules, NSG flow logs, connection troubleshoot) to identify the deny rule.

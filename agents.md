@@ -5,11 +5,12 @@
 - Cleanup checks deployment stack tag `cleanupAfter` and, when due, runs `az stack sub delete --action-on-unmanage deleteAll` to remove all managed lab RGs in one operation.
 - `operation=prepare-rgs` and `operation=deploy-example` both refresh `cleanupAfter` to 24 hours in the future.
 - `operation=deploy-example` deploys into the hardcoded RG `az-learn-01`. RG names always use the hardcoded `az-learn-` prefix.
-- `AZURE_ADMIN_SSH_PUBLIC_KEY` is read from repository variables (not secrets) and injected as the VM authorized key.
+- `AZURE_ENTRA_ADMIN_OBJECT_ID` is optional (code default is the lab admin group) and, when set, overrides the `.bicepparam` default for the **Virtual Machine Administrator Login** grant on each lab VM (user, group, or service principal via `entraAdminPrincipalType`, default `Group`). `AZURE_ADMIN_SSH_PUBLIC_KEY` is optional and, when set, is also deployed as the VM authorized key.
 - `AZURE_TRUSTED_SSH_CIDR` is required and passed to examples to restrict SSH ingress.
 - Azure auth for workflows uses OIDC (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) with `azure/login@v2`, not `AZURE_CREDENTIALS`.
-- Example deployments now use `.bicepparam` files that read `AZURE_ADMIN_SSH_PUBLIC_KEY` and `AZURE_TRUSTED_SSH_CIDR` from environment variables.
+- Example deployments now use `.bicepparam` files that read `AZURE_ENTRA_ADMIN_OBJECT_ID` and `AZURE_TRUSTED_SSH_CIDR` from environment variables, plus optional `AZURE_ADMIN_SSH_PUBLIC_KEY` (empty default = Entra-only).
 - Cleanup scheduling is handled in a dedicated `.github/workflows/cleanup-lab.yml` workflow (daily 05:00 UTC), separate from deploy workflow.
 - Both examples are standalone templates in their own `main.bicep` files and no longer use a shared module.
 - Both labs use dual-stack (IPv4 + IPv6) VNets/subnets so VM NICs have a required primary IPv4 configuration, plus IPv6-only public IP addresses.
+- Both labs authenticate with Entra ID: system-assigned identity + `AADSSHLoginForLinux` extension + `Virtual Machine Administrator Login` role assignment. SSH key login is optionally enabled when `adminPublicKey` is non-empty. Connect with `az ssh vm --ip <host-ipv6>`.
 - All lab subnets set `defaultOutboundAccess: false` (private subnets). Explicit internet egress is IPv6 via the free NIC-attached PIP; no NAT gateway or IPv4 PIP is deployed to keep cost at $0 extra. IPv4 is VNet/peering-local only.

@@ -1,7 +1,18 @@
 targetScope = 'resourceGroup'
 
-@description('SSH public key used for VM authentication.')
-param adminPublicKey string
+@description('Entra ID object ID granted Virtual Machine Administrator Login on both VMs. Find yours with: az ad signed-in-user show --query id -o tsv. A group object ID also works (set entraAdminPrincipalType to Group).')
+param entraAdminObjectId string
+
+@description('Principal type of entraAdminObjectId. Use Group when entraAdminObjectId is an Entra group object ID.')
+@allowed([
+  'User'
+  'Group'
+  'ServicePrincipal'
+])
+param entraAdminPrincipalType string = 'Group'
+
+@description('Optional SSH public key for the VM admin user. Empty means Entra ID login only; set to also allow SSH key login.')
+param adminPublicKey string = ''
 
 @description('Resource name prefix for this example deployment.')
 param namePrefix string = 'sharedvnet'
@@ -279,6 +290,9 @@ resource hostBNic 'Microsoft.Network/networkInterfaces@2024-05-01' = {
 resource hostAVm 'Microsoft.Compute/virtualMachines@2024-07-01' = {
   name: '${namePrefix}-${hostA.name}'
   location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     hardwareProfile: {
       vmSize: vmSize
@@ -303,7 +317,7 @@ resource hostAVm 'Microsoft.Compute/virtualMachines@2024-07-01' = {
       ''')
       linuxConfiguration: {
         disablePasswordAuthentication: true
-        ssh: {
+        ssh: empty(adminPublicKey) ? null : {
           publicKeys: [
             {
               path: '/home/${adminUsername}/.ssh/authorized_keys'
@@ -337,9 +351,34 @@ resource hostAVm 'Microsoft.Compute/virtualMachines@2024-07-01' = {
   }
 }
 
+resource hostAVmAadLogin 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = {
+  name: 'AADSSHLoginForLinux'
+  parent: hostAVm
+  location: location
+  properties: {
+    publisher: 'Microsoft.Azure.ActiveDirectory'
+    type: 'AADSSHLoginForLinux'
+    typeHandlerVersion: '1.0'
+    autoUpgradeMinorVersion: true
+  }
+}
+
+resource hostAVmAdminLogin 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(hostAVm.id, entraAdminObjectId, 'vm-admin-login')
+  scope: hostAVm
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+    principalId: entraAdminObjectId
+    principalType: entraAdminPrincipalType
+  }
+}
+
 resource hostBVm 'Microsoft.Compute/virtualMachines@2024-07-01' = {
   name: '${namePrefix}-${hostB.name}'
   location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     hardwareProfile: {
       vmSize: vmSize
@@ -365,7 +404,7 @@ resource hostBVm 'Microsoft.Compute/virtualMachines@2024-07-01' = {
       ''')
       linuxConfiguration: {
         disablePasswordAuthentication: true
-        ssh: {
+        ssh: empty(adminPublicKey) ? null : {
           publicKeys: [
             {
               path: '/home/${adminUsername}/.ssh/authorized_keys'
@@ -396,6 +435,28 @@ resource hostBVm 'Microsoft.Compute/virtualMachines@2024-07-01' = {
         }
       ]
     }
+  }
+}
+
+resource hostBVmAadLogin 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = {
+  name: 'AADSSHLoginForLinux'
+  parent: hostBVm
+  location: location
+  properties: {
+    publisher: 'Microsoft.Azure.ActiveDirectory'
+    type: 'AADSSHLoginForLinux'
+    typeHandlerVersion: '1.0'
+    autoUpgradeMinorVersion: true
+  }
+}
+
+resource hostBVmAdminLogin 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(hostBVm.id, entraAdminObjectId, 'vm-admin-login')
+  scope: hostBVm
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+    principalId: entraAdminObjectId
+    principalType: entraAdminPrincipalType
   }
 }
 

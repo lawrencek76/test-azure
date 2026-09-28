@@ -54,6 +54,7 @@ jobs:
           DISPATCH_OPERATION: ${{ github.event.inputs.operation }}
           DISPATCH_EXAMPLE: ${{ github.event.inputs.example }}
           DISPATCH_LOCATION: ${{ github.event.inputs.location }}
+          AZURE_ENTRA_ADMIN_OBJECT_ID: ${{ vars.AZURE_ENTRA_ADMIN_OBJECT_ID }}
           AZURE_ADMIN_SSH_PUBLIC_KEY: ${{ vars.AZURE_ADMIN_SSH_PUBLIC_KEY }}
           AZURE_TRUSTED_SSH_CIDR: ${{ vars.AZURE_TRUSTED_SSH_CIDR }}
         run: |
@@ -120,10 +121,6 @@ jobs:
             deploy-example)
               deploy_rg_stack
 
-              if [[ -z "${AZURE_ADMIN_SSH_PUBLIC_KEY}" ]]; then
-                echo "Repository variable AZURE_ADMIN_SSH_PUBLIC_KEY must be set." >&2
-                exit 1
-              fi
               if [[ -z "${AZURE_TRUSTED_SSH_CIDR}" ]]; then
                 echo "Repository variable AZURE_TRUSTED_SSH_CIDR must be set (comma-separated, for example your-public-ip/32,your-public-ip/128)." >&2
                 exit 1
@@ -134,6 +131,11 @@ jobs:
               if [[ ! -f "${param_file}" ]]; then
                 echo "Unsupported example: ${example}" >&2
                 exit 1
+              fi
+
+              if [[ -z "${AZURE_ENTRA_ADMIN_OBJECT_ID:-}" ]]; then
+                echo "AZURE_ENTRA_ADMIN_OBJECT_ID not set; using group default from ${param_file}."
+                unset AZURE_ENTRA_ADMIN_OBJECT_ID
               fi
 
               if ! az group show --name "${rg_target}" >/dev/null 2>&1; then

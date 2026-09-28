@@ -4,9 +4,20 @@ param namePrefix string = 'azlab'
 @description('Azure region for all resources.')
 param location string = resourceGroup().location
 
-@description('SSH public key used for VM admin authentication.')
+@description('Entra ID object ID granted Virtual Machine Administrator Login on both VMs. A group object ID also works (set entraAdminPrincipalType to Group).')
 @minLength(1)
-param adminPublicKey string
+param entraAdminObjectId string
+
+@description('Principal type of entraAdminObjectId. Use Group when entraAdminObjectId is an Entra group object ID.')
+@allowed([
+  'User'
+  'Group'
+  'ServicePrincipal'
+])
+param entraAdminPrincipalType string = 'Group'
+
+@description('Optional SSH public key for the VM admin user. Empty means Entra ID login only; set to also allow SSH key login.')
+param adminPublicKey string = ''
 
 @description('Admin username for both Linux VMs.')
 param adminUsername string = 'azureuser'
@@ -262,6 +273,9 @@ resource nics 'Microsoft.Network/networkInterfaces@2024-05-01' = [for (config, i
 resource virtualMachines 'Microsoft.Compute/virtualMachines@2024-07-01' = [for (config, i) in vmConfigs: {
   name: '${namePrefix}-${config.name}'
   location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     priority: 'Spot'
     evictionPolicy: 'Delete'
@@ -292,7 +306,7 @@ resource virtualMachines 'Microsoft.Compute/virtualMachines@2024-07-01' = [for (
       ''')
       linuxConfiguration: {
         disablePasswordAuthentication: true
-        ssh: {
+        ssh: empty(adminPublicKey) ? null : {
           publicKeys: [
             {
               path: '/home/${adminUsername}/.ssh/authorized_keys'
@@ -323,6 +337,28 @@ resource virtualMachines 'Microsoft.Compute/virtualMachines@2024-07-01' = [for (
         }
       ]
     }
+  }
+}]
+
+resource aadLoginExtensions 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [for (config, i) in vmConfigs: {
+  name: 'AADSSHLoginForLinux'
+  parent: virtualMachines[i]
+  location: location
+  properties: {
+    publisher: 'Microsoft.Azure.ActiveDirectory'
+    type: 'AADSSHLoginForLinux'
+    typeHandlerVersion: '1.0'
+    autoUpgradeMinorVersion: true
+  }
+}]
+
+resource vmAdminLogins 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for (config, i) in vmConfigs: {
+  name: guid(virtualMachines[i].id, entraAdminObjectId, 'vm-admin-login')
+  scope: virtualMachines[i]
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+    principalId: entraAdminObjectId
+    principalType: entraAdminPrincipalType
   }
 }]
 
