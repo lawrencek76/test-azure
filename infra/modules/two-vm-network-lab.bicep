@@ -356,7 +356,7 @@ resource vmAdminLogins 'Microsoft.Authorization/roleAssignments@2022-04-01' = [f
   name: guid(virtualMachines[i].id, entraAdminObjectId, 'vm-admin-login')
   scope: virtualMachines[i]
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1c0163c0-47e6-4577-8991-ea5c82e286e4')
     principalId: entraAdminObjectId
     principalType: entraAdminPrincipalType
   }
